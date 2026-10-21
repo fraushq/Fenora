@@ -1,5 +1,7 @@
 class RegistrationSystem {
     constructor() {
+        const rn = document.getElementById('rightNav');
+        if (rn) rn.style.display = 'none';
         this.wrapper = document.getElementById('registerWrapper');
         this.form = document.getElementById('registerForm');
         this.avatarPreview = document.getElementById('avatarPreview');
@@ -81,6 +83,8 @@ class RegistrationSystem {
     hideRegisterPage() {
         this.wrapper.classList.add('hidden');
         setTimeout(() => { this.wrapper.style.display = 'none'; }, 600);
+        const rn = document.getElementById('rightNav');
+        if (rn) rn.style.display = 'flex';
     }
     getUser() { try { return JSON.parse(localStorage.getItem('user')); } catch { return null; } }
     static logout() {

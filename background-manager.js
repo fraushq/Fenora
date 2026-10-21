@@ -227,7 +227,7 @@ class BackgroundManager {
 
     _restoreUserAccent() {
         if (typeof applyColorPreset !== 'function') return;
-        const key = localStorage.getItem('colorPreset') || 'yellow';
+        const key = localStorage.getItem('colorPreset') || 'crimson';
         applyColorPreset(key);
     }
 

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Fenora overlay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        font-family: 'Space Grotesk', -apple-system, sans-serif;
+        user-select: none;
+        -webkit-app-region: no-drag;
+    }
+
+    .ov-card {
+        width: 100%;
+        height: 100%;
+        padding: 12px 16px 12px 12px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+
+        background: rgba(18, 18, 18, 0.94);
+        border: 1px solid #262626;
+        border-left: 3px solid #FE1743;
+        border-radius: 14px;
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65);
+
+        opacity: 0;
+        transform: translateX(24px) scale(0.96);
+        transition: opacity 0.28s ease, transform 0.4s cubic-bezier(0.34, 1.4, 0.5, 1);
+    }
+    .ov-card.visible {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+
+    .ov-cover {
+        width: 64px;
+        height: 64px;
+        border-radius: 10px;
+        background: #0A0A0A;
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        color: #FE1743;
+        font-size: 28px;
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 700;
+        opacity: 0.5;
+        border: 1px solid #262626;
+    }
+    .ov-cover.has-image {
+        opacity: 1;
+        border-color: transparent;
+    }
+    .ov-cover.has-image span { display: none; }
+
+    .ov-info {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+
+    .ov-label {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: #FE1743;
+        opacity: 0.9;
+    }
+
+    .ov-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #FAFAFA;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .ov-artist {
+        font-size: 12px;
+        color: #8A8A8A;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .ov-time {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        color: #8A8A8A;
+        margin-top: 4px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .ov-progress {
+        flex: 1;
+        height: 2px;
+        background: #262626;
+        border-radius: 1px;
+        overflow: hidden;
+        position: relative;
+    }
+    .ov-progress-fill {
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        width: 0%;
+        background: #FE1743;
+        border-radius: 1px;
+        transition: width 0.2s linear;
+    }
+</style>
+</head>
+<body>
+    <div class="ov-card" id="ovCard">
+        <div class="ov-cover" id="ovCover"><span>♪</span></div>
+        <div class="ov-info">
+            <div class="ov-label" id="ovLabel">Играет сейчас</div>
+            <div class="ov-title" id="ovTitle">—</div>
+            <div class="ov-artist" id="ovArtist">—</div>
+            <div class="ov-time">
+                <span id="ovCurrent">0:00</span>
+                <div class="ov-progress"><div class="ov-progress-fill" id="ovProgress"></div></div>
+                <span id="ovTotal">0:00</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const card      = document.getElementById('ovCard');
+        const cover     = document.getElementById('ovCover');
+        const label     = document.getElementById('ovLabel');
+        const title     = document.getElementById('ovTitle');
+        const artist    = document.getElementById('ovArtist');
+        const current   = document.getElementById('ovCurrent');
+        const total     = document.getElementById('ovTotal');
+        const progress  = document.getElementById('ovProgress');
+
+        let hideTimer = null;
+        let progressTimer = null;
+
+        function show(data) {
+            if (data.coverUrl) {
+                cover.style.backgroundImage = `url("${data.coverUrl}")`;
+                cover.classList.add('has-image');
+            } else {
+                cover.style.backgroundImage = '';
+                cover.classList.remove('has-image');
+            }
+            title.textContent  = data.title  || '—';
+            artist.textContent = data.artist || '—';
+            label.textContent  = data.label  || 'Играет сейчас';
+
+            card.classList.add('visible');
+
+            clearTimeout(hideTimer);
+            hideTimer = setTimeout(() => {
+                card.classList.remove('visible');
+            }, 3000);
+
+            clearInterval(progressTimer);
+            if (data.duration > 0) {
+                const tick = () => {
+                    const t = data.startTime + (Date.now() - data.startedAt) / 1000;
+                    const pct = Math.min(100, (t / data.duration) * 100);
+                    progress.style.width = pct + '%';
+                    current.textContent = formatTime(t);
+                    total.textContent = formatTime(data.duration);
+                };
+                tick();
+                progressTimer = setInterval(tick, 250);
+            } else {
+                progress.style.width = '0%';
+                current.textContent = '0:00';
+                total.textContent = '0:00';
+            }
+        }
+
+        function formatTime(sec) {
+            if (!isFinite(sec) || sec < 0) return '0:00';
+            const m = Math.floor(sec / 60);
+            const s = Math.floor(sec % 60);
+            return m + ':' + String(s).padStart(2, '0');
+        }
+
+        window.electronAPI?.overlay?.onData((data) => show(data));
+    </script>
+</body>
+</html>

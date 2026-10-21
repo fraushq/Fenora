@@ -217,6 +217,10 @@ class ContextMenu {
             if (typeof window.openLyrics === 'function') {
                 window.openLyrics(this.currentTrackIndex);
             }
+        } else if (action === 'findCover') {
+            if (typeof window.findCoverForTrack === 'function') {
+                window.findCoverForTrack(track);
+            }
         }
     }
 
@@ -236,13 +240,13 @@ class ContextMenu {
         }
     }
 
-    createAndAddToNewPlaylist() {
+    async createAndAddToNewPlaylist() {
         if (this.currentTrackIndex === null) return;
         const track = this.audioEngine.playlist[this.currentTrackIndex];
         if (!track) return;
 
-        const name = prompt('Введите название нового плейлиста:', 'Мой плейлист');
-        if (!name || !name.trim()) return;
+        const name = await window.askPrompt('Введите название нового плейлиста:', 'Мой плейлист');
+        if (!name) return;
 
         const playlist = this.playlistManager.createPlaylist(name.trim());
         this.playlistManager.addTrackToPlaylist(playlist.id, track);

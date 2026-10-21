@@ -40,8 +40,9 @@ class TrackStorage {
         return tx.objectStore('tracks');
     }
     async saveTrack(track) {
-        await this.waitReady();
+        if (!this.ready) await this.waitReady();
         if (!this.db) return false;
+    
         return new Promise((resolve) => {
             try {
                 const store = this._store('readwrite');
@@ -68,7 +69,7 @@ class TrackStorage {
         });
     }
     async updateMetadata(track) {
-        await this.waitReady();
+        if (!this.ready) await this.waitReady();
         if (!this.db) return false;
         return new Promise((resolve) => {
             try {
@@ -95,13 +96,13 @@ class TrackStorage {
             }
         });
     }
-    async deleteTrack(id) {
-        await this.waitReady();
+    async deleteTrack(track) {
+        if (!this.ready) await this.waitReady();
         if (!this.db) return false;
         return new Promise((resolve) => {
             try {
                 const store = this._store('readwrite');
-                const req = store.delete(id);
+                const req = store.delete(track);
                 req.onsuccess = () => resolve(true);
                 req.onerror = () => resolve(false);
             } catch (e) {
@@ -109,9 +110,9 @@ class TrackStorage {
             }
         });
     }
-    async getAllTracks() {
-        await this.waitReady();
-        if (!this.db) return [];
+    async getAllTracks(track) {
+        if (!this.ready) await this.waitReady();
+        if (!this.db) return false;
         return new Promise((resolve) => {
             try {
                 const store = this._store('readonly');
@@ -128,7 +129,7 @@ class TrackStorage {
         });
     }
     async clearAll() {
-        await this.waitReady();
+        if (!this.ready) await this.waitReady();
         if (!this.db) return false;
         return new Promise((resolve) => {
             try {
@@ -142,7 +143,7 @@ class TrackStorage {
         });
     }
     async countTracks() {
-        await this.waitReady();
+        if (!this.ready) await this.waitReady();
         if (!this.db) return 0;
         return new Promise((resolve) => {
             try {

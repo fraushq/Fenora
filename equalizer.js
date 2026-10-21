@@ -123,9 +123,9 @@ class EqualizerUI {
         }
     }
 
-    savePreset() {
-        const name = prompt('Название пресета:', 'Мой пресет');
-        if (!name || !name.trim()) return;
+    async savePreset() {
+        const name = await window.askPrompt('Название пресета:', 'Мой пресет');
+        if (!name) return;
         const clean = name.trim().slice(0, 30);
         if (EQ_PRESETS[clean] || this.customPresets[clean]) {
             if (!confirm(`Пресет «${clean}» уже существует. Перезаписать?`)) return;

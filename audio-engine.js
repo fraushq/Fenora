@@ -1,21 +1,18 @@
 function parseTrackFilename(name) {
     let baseName = String(name || '').replace(/\.[^/.]+$/, '');
 
-    // срезаем ведущий номер: "01 - ", "01. ", "[01] ", "01_ ", "01– ", "01— "
     baseName = baseName.replace(/^\s*[\[\(]?\d{1,3}[\]\)]?\s*[-._\u2013\u2014]\s*/, '');
     baseName = baseName.trim();
 
     let title  = baseName || 'Неизвестный трек';
     let artist = 'Неизвестный исполнитель';
 
-    // первый разделитель " - " / " – " / " — "
     const m = baseName.match(/^(.+?)\s+[-\u2013\u2014]\s+(.+)$/);
     if (m && m[1].trim() && m[2].trim()) {
         artist = m[1].trim();
         title  = m[2].trim();
     }
 
-    // если "artist" — это просто число, значит это на самом деле не артист
     if (/^\d+$/.test(artist)) {
         title  = `${artist} - ${title}`;
         artist = 'Неизвестный исполнитель';
@@ -89,6 +86,9 @@ class AudioEngine {
         this.audio.addEventListener('play', () => {
             this.isPlaying = true;
             this.updatePlayButtons();
+            if (this.normalizeEnabled && !this._normTimer) {
+                this._startNormLoop();
+            }
             if (typeof this.onPlay === 'function') this.onPlay();
         });
 
@@ -268,7 +268,7 @@ class AudioEngine {
             this.limiter.threshold.setTargetAtTime(-6, now, 0.1);
             this.limiter.ratio.setTargetAtTime(12, now, 0.1);
             this._rmsSmoothed = 0;
-            this._startNormLoop();
+            if (this.isPlaying) this._startNormLoop();
         } else {
             this.limiter.threshold.setTargetAtTime(0, now, 0.1);
             this.limiter.ratio.setTargetAtTime(1, now, 0.1);
@@ -293,7 +293,11 @@ class AudioEngine {
             this._normTimer = null;
             return;
         }
-        if (this.isPlaying) this._updateNormGain();
+        if (!this.isPlaying) {
+            this._normTimer = null;
+            return;
+        }
+        this._updateNormGain();
         this._normTimer = setTimeout(() => this._tickNorm(), 200);
     }
 

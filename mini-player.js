@@ -196,6 +196,12 @@
         applyTransition(targetPage) {
             const pc = document.querySelector('.player-column');
 
+            if (targetPage === 'builder') {
+                this.hide();
+                if (pc) pc.classList.remove('is-shrinking');
+                return;
+            }
+
             if (targetPage !== 'home') {
                 this.show();
             } else {

@@ -1,7 +1,7 @@
 {
-  "name": "mbox",
-  "version": "0.51.0",
-  "description": "mbox — твой плеер в браузере",
+  "name": "fenora",
+  "version": "0.10.0",
+  "description": "Fenora — твой плеер в браузере",
   "main": "main.js",
   "author": "Fraush",
   "license": "MIT",
@@ -18,8 +18,9 @@
     "electron-builder": "latest"
   },
   "build": {
-    "appId": "app.mbox",
-    "productName": "mbox",
+    "appId": "com.fenora.player",
+    "productName": "Fenora",
+    "asar": false,
     "directories": {
       "output": "dist-electron"
     },
@@ -27,24 +28,31 @@
       "main.js",
       "preload.js",
       "index.html",
+      "overlay.html",
       "style.css",
       "*.js",
       "*.png",
       "*.svg",
-      "!node_modules",
-      "!dist-electron"
+      "node_modules/**/*"
     ],
     "win": {
       "target": "nsis",
-      "icon": "mbox192.png"
+      "icon": "fenora-logo.png"
     },
     "mac": {
       "target": "dmg",
-      "icon": "mbox192.png"
+      "icon": "fenora-logo.png"
     },
     "linux": {
       "target": "AppImage",
-      "icon": "mbox192.png"
+      "icon": "fenora-logo.png"
     }
+  },
+  "dependencies": {
+    "ffmpeg-static": "^5.3.0",
+    "hcacher": "^0.3.0",
+    "hemmiter": "^0.1.0",
+    "soundcloud.ts": "^0.7.4",
+    "yamd2": "^1.5.3"
   }
 }

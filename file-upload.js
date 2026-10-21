@@ -109,7 +109,6 @@ class FileUploadSystem {
         return `${before}<mark class="lib-mark">${match}</mark>${after}`;
     }
 
-//ВЫДЕЛЕНИЕ ТРЕКОВ
     createSelectionBar() {
         const bar = document.createElement('div');
         bar.className = 'selection-bar';
@@ -338,12 +337,12 @@ class FileUploadSystem {
             : `Все выбранные треки уже в «${playlist.name}»`);
     }
 
-    bulkAddToNewPlaylist() {
+    async bulkAddToNewPlaylist() {
         const ids = Array.from(this._selected);
         if (ids.length === 0) return;
 
-        const name = prompt('Название нового плейлиста:', 'Мой плейлист');
-        if (!name || !name.trim()) return;
+        const name = await window.askPrompt('Название нового плейлиста:', 'Мой плейлист');
+        if (!name) return;
 
         const playlist = window.playlistManager.createPlaylist(name.trim());
         let added = 0;
@@ -571,7 +570,8 @@ class FileUploadSystem {
             updateCounter(playlistCount, n, word);
         }
 
-    if (window.trackQueue) window.trackQueue.render();
+        if (window.trackQueue) window.trackQueue.render();
+        if (typeof updateEmptyState === 'function') updateEmptyState();
 }
 
     showNotification(message, isError = false) {

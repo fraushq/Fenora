@@ -55,6 +55,11 @@ const REGION_DATA = [
     { name: 'АНТАРКТИДА', polys: [], latTest: (lat) => lat < -66 }
 ];
 const COLOR_PRESETS = {
+    crimson: {
+        name: 'Фенор',
+        dark:  { y: '#FE1743', yDeep: '#E01238', glow: 'rgba(254,23,67,0.15)', rgb: [254, 23, 67] },
+        light: { y: '#E01238', yDeep: '#C00F2F', glow: 'rgba(224,18,56,0.2)' }
+    },
     yellow: {
         name: 'Жёлтый',
         dark:  { y: '#FFD400', yDeep: '#E6BE00', glow: 'rgba(255,212,0,0.15)', rgb: [255, 212, 0] },

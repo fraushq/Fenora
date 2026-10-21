@@ -7,12 +7,16 @@ class Visualizer {
         this.canvas = null;
         this.ctx = null;
         this.pulse = null;
+        this.disabled = false;
         this.init();
     }
 
     init() {
         const container = document.getElementById('visualizer');
-        if (!container) return;
+        if (!container) {
+            this.disabled = true;
+            return;
+        }
         container.innerHTML = '';
 
         const barsWrap = document.createElement('div');
@@ -44,6 +48,7 @@ class Visualizer {
 
     setMode(mode) {
         if (!['bars', 'wave', 'pulse'].includes(mode)) mode = 'bars';
+        if (this.disabled && mode !== 'bars') mode = 'bars';
         this.mode = mode;
 
         const container = document.getElementById('visualizer');
@@ -53,7 +58,7 @@ class Visualizer {
         if (mode !== 'bars') {
             this.bars.forEach(b => b.style.height = '4px');
         }
-        if (mode !== 'wave' && this.ctx) {
+        if (mode !== 'wave' && this.ctx && this.canvas) {
             this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         }
         if (mode !== 'pulse' && this.pulse) {
@@ -64,14 +69,14 @@ class Visualizer {
     }
 
     start() {
-        if (this.animId) return;
+        if (this.animId || this.disabled) return;
         const animate = () => {
             if (isEcoMode) { this.stop(); return; }
             const data = this.audioEngine.getFrequencyData();
             if (data) {
                 if (this.mode === 'bars')       this.drawBars(data);
-                else if (this.mode === 'wave')  this.drawWave(data);
-                else if (this.mode === 'pulse') this.drawPulse(data);
+                else if (this.mode === 'wave' && this.canvas && this.ctx)  this.drawWave(data);
+                else if (this.mode === 'pulse' && this.pulse)              this.drawPulse(data);
             }
             this.animId = requestAnimationFrame(animate);
         };
@@ -83,8 +88,9 @@ class Visualizer {
             cancelAnimationFrame(this.animId);
             this.animId = null;
         }
+        if (this.disabled) return;
         this.bars.forEach(bar => bar.style.height = '4px');
-        if (this.ctx) this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        if (this.ctx && this.canvas) this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         if (this.pulse) {
             this.pulse.style.transform = 'scale(1)';
             this.pulse.style.boxShadow = '0 0 0 0 transparent';
@@ -93,6 +99,7 @@ class Visualizer {
     }
 
     drawBars(data) {
+        if (!this.bars.length) return;
         const step = Math.floor(data.length / this.bars.length);
         this.bars.forEach((bar, i) => {
             const h = Math.max(4, (data[i * step] / 255) * 60);
@@ -150,10 +157,11 @@ class Visualizer {
     }
 
     drawPulse(data) {
+        if (!this.pulse) return;
         const bassCount = Math.max(1, Math.floor(data.length / 8));
         let sum = 0;
         for (let i = 0; i < bassCount; i++) sum += data[i];
-        const bass = sum / bassCount / 255; // 0..1
+        const bass = sum / bassCount / 255;
 
         const scale = 1 + bass * 0.45;
         const glow = Math.round(bass * 24);

@@ -36,42 +36,118 @@ class GlobeView {
         this.labelCache = new Map();
         this.onRegionSelect = null;
 
+        this._ptsCache = {};
+        this._landPtsCache = {};
+        this._currentQuality = null;
+
+        this.quality = localStorage.getItem('globeQuality') || 'medium';
+        this._applyQualityConfig();
+
+        this._accentRGB = { r: 255, g: 212, b: 0 };
+        this._accentDirty = true;
+
+        this._lastRender = 0;
+        this._frameInterval = 1000 / this._targetFps;
+
         this.pts = [];
         this.landPts = [];
-        this.buildSphere();
+        this._ensurePoints();
 
         this.bindEvents();
         this.resize();
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) this.stop();
+            else if (!isEcoMode && this._shouldRun()) this.start();
+        });
     }
 
-    buildSphere() {
-        const n = 12000;
+    _applyQualityConfig() {
+        const configs = {
+            low:    { points: 4000,  fps: 30 },
+            medium: { points: 8000,  fps: 30 },
+            high:   { points: 12000, fps: 60 },
+        };
+        const cfg = configs[this.quality] || configs.medium;
+        this._targetPoints = cfg.points;
+        this._targetFps = cfg.fps;
+        this._frameInterval = 1000 / this._targetFps;
+    }
+
+    setQuality(q) {
+        if (!['low', 'medium', 'high'].includes(q)) return;
+        this.quality = q;
+        localStorage.setItem('globeQuality', q);
+        this._applyQualityConfig();
+        this._ensurePoints();
+    }
+
+    _ensurePoints() {
+        const N = this._targetPoints;
+        if (this._ptsCache[N] && this._landPtsCache[N]) {
+            this.pts = this._ptsCache[N];
+            this.landPts = this._landPtsCache[N];
+            this._currentQuality = N;
+            return;
+        }
+
+        const pts = [];
+        const landPts = [];
         const GOLDEN = Math.PI * (3 - Math.sqrt(5));
-        for (let i = 0; i < n; i++) {
-            const y = 1 - (i + 0.5) * 2 / n;
+        const DEG = 180 / Math.PI;
+
+        for (let i = 0; i < N; i++) {
+            const y = 1 - (i + 0.5) * 2 / N;
             const r = Math.sqrt(Math.max(0, 1 - y * y));
             const th = GOLDEN * i;
             const x = Math.cos(th) * r;
             const z = Math.sin(th) * r;
-            const lat = Math.asin(Math.max(-1, Math.min(1, y))) * 180 / Math.PI;
-            const lon = Math.atan2(z, x) * 180 / Math.PI;
+            const lat = Math.asin(Math.max(-1, Math.min(1, y))) * DEG;
+            const lon = Math.atan2(z, x) * DEG;
             const reg = regionAt(lon, lat);
             const p = { x, y, z, reg, phase: Math.random() * Math.PI * 2 };
-            this.pts.push(p);
-            if (reg >= 0) this.landPts.push(p);
+            pts.push(p);
+            if (reg >= 0) landPts.push(p);
         }
+
+        this._ptsCache[N] = pts;
+        this._landPtsCache[N] = landPts;
+        this.pts = pts;
+        this.landPts = landPts;
+        this._currentQuality = N;
+    }
+
+    refreshColors() {
+        this._accentDirty = true;
+    }
+
+    _getAccent() {
+        if (this._accentDirty) {
+            const raw = getComputedStyle(document.documentElement)
+                .getPropertyValue('--y-rgb').trim();
+            if (raw) {
+                const parts = raw.split(',');
+                this._accentRGB = {
+                    r: parseInt(parts[0], 10) || 255,
+                    g: parseInt(parts[1], 10) || 212,
+                    b: parseInt(parts[2], 10) || 0
+                };
+            }
+            this._accentDirty = false;
+        }
+        return this._accentRGB;
     }
 
     resize() {
         if (this.disabled) return;
         const rect = this.canvas.parentElement.getBoundingClientRect();
-        this.DPR = Math.min(window.devicePixelRatio || 1, 2);
+        this.DPR = Math.min(window.devicePixelRatio || 1, 1.5);
         this.W = rect.width;
         this.H = rect.height;
         this.hintEl?.classList.remove('hide');
-        this.canvas.width = Math.round(this.W * this.DPR);
+        this.canvas.width  = Math.round(this.W * this.DPR);
         this.canvas.height = Math.round(this.H * this.DPR);
-        this.canvas.style.width = this.W + 'px';
+        this.canvas.style.width  = this.W + 'px';
         this.canvas.style.height = this.H + 'px';
         this.ctx.setTransform(this.DPR, 0, 0, this.DPR, 0, 0);
         this.CX = this.W / 2;
@@ -79,7 +155,46 @@ class GlobeView {
         this.RAD = Math.min(this.W, this.H) * 0.34;
     }
 
-        bindEvents() {
+    _shouldRun() {
+        const home = document.getElementById('page-home');
+        return home && home.classList.contains('active') &&
+               !document.getElementById('stageColumn')?.classList.contains('show-cover');
+    }
+
+        updateHoveredRegion() {
+        if (!this.pointerInside || this.dragging) {
+            this.hoveredRegion = -1;
+            return;
+        }
+        
+        const cY = Math.cos(this.rotY), sY = Math.sin(this.rotY);
+        const cX = Math.cos(this.rotX), sX = Math.sin(this.rotX);
+        
+        let bestD = 35 * 35; 
+        let newHover = -1;
+        
+        for (const p of this.landPts) {
+            const x1 = p.x * cY - p.z * sY;
+            const z1 = p.x * sY + p.z * cY;
+            const y2 = p.y * cX - z1 * sX;
+            const z2 = p.y * sX + z1 * cX;
+            if (z2 < 0.18) continue;
+            
+            const sx = this.CX - x1 * this.RAD;
+            const sy = this.CY - y2 * this.RAD;
+            const dx = sx - this.mouseX, dy = sy - this.mouseY;
+            const d2 = dx * dx + dy * dy;
+            
+            if (d2 < bestD) { 
+                bestD = d2; 
+                newHover = p.reg; 
+            }
+        }
+        
+        this.hoveredRegion = newHover;
+    }
+
+    bindEvents() {
         if (this.disabled) return;
 
         window.addEventListener('resize', () => this.resize());
@@ -130,7 +245,6 @@ class GlobeView {
         });
 
         this.canvas.addEventListener('pointerup', (e) => {
-            const wasDragging = this.dragging;
             const wasDrag = this._wasDrag;
 
             this.dragging = false;
@@ -148,9 +262,8 @@ class GlobeView {
             this.mouseX = e.clientX - rect.left;
             this.mouseY = e.clientY - rect.top;
 
-            requestAnimationFrame(() => {
-                this.handleRegionClick();
-            });
+            this.updateHoveredRegion();
+            this.handleRegionClick();
         });
 
         this.canvas.addEventListener('pointercancel', () => {
@@ -249,16 +362,6 @@ class GlobeView {
         return res;
     }
 
-    getAccent() {
-        const style = getComputedStyle(document.documentElement);
-        const raw = style.getPropertyValue('--y-rgb').trim();
-        if (raw) {
-            const [r, g, b] = raw.split(',').map(v => parseInt(v, 10));
-            return { r, g, b };
-        }
-        return { r: 255, g: 212, b: 0 };
-    }
-
     makePalette(r, g, b) {
         const arr = new Array(66);
         for (let i = 0; i <= 65; i++) {
@@ -269,15 +372,21 @@ class GlobeView {
 
     start() {
         if (this.disabled || this.animId) return;
+        if (!this._shouldRun()) return;
 
-    clearTimeout(this._hintTimer);
-    this._hintTimer = setTimeout(() => {
-        this.hintEl?.classList.add('hide');
-    }, 6000);
+        clearTimeout(this._hintTimer);
+        this._hintTimer = setTimeout(() => {
+            this.hintEl?.classList.add('hide');
+        }, 6000);
 
+        this._lastRender = 0;
         this.lastT = performance.now();
         const loop = (now) => {
             this.animId = requestAnimationFrame(loop);
+
+            if (now - this._lastRender < this._frameInterval) return;
+            this._lastRender = now;
+
             this.frame(now);
         };
         this.animId = requestAnimationFrame(loop);
@@ -296,11 +405,13 @@ class GlobeView {
         this.lastT = now;
         if (!isFinite(dt) || dt <= 0) dt = 0.016;
         if (dt > 0.05) dt = 0.05;
+        const fpsMult = this._targetFps === 30 ? 2 : 1;
+        const dtAdjusted = dt * fpsMult;
 
         if (!this.dragging) {
             this.rotY += this.velY * dt;
             this.rotX += this.velX * dt;
-            const decay = Math.pow(0.3, dt);
+            const decay = Math.pow(0.3, dtAdjusted);
             this.velY *= decay;
             this.velX *= decay;
             if (Math.abs(this.velY) < 0.002) this.velY = 0;
@@ -312,26 +423,10 @@ class GlobeView {
         const cY = Math.cos(this.rotY), sY = Math.sin(this.rotY);
         const cX = Math.cos(this.rotX), sX = Math.sin(this.rotX);
 
-        let newHover = -1;
-        if (this.pointerInside && !this.dragging) {
-            let bestD = 26 * 26;
-            for (const p of this.landPts) {
-                const x1 = p.x * cY - p.z * sY;
-                const z1 = p.x * sY + p.z * cY;
-                const y2 = p.y * cX - z1 * sX;
-                const z2 = p.y * sX + z1 * cX;
-                if (z2 < 0.18) continue;
-                const sx = this.CX - x1 * this.RAD;
-                const sy = this.CY - y2 * this.RAD;
-                const dx = sx - this.mouseX, dy = sy - this.mouseY;
-                const d2 = dx * dx + dy * dy;
-                if (d2 < bestD) { bestD = d2; newHover = p.reg; }
-            }
-        }
-        this.hoveredRegion = newHover;
+        this.updateHoveredRegion();
 
         this.anyHover = 0;
-        const ease = Math.min(1, dt * 13);
+        const ease = Math.min(1, dtAdjusted * 13);
         for (let i = 0; i < REGION_DATA.length; i++) {
             const target = (i === this.hoveredRegion) ? 1 : 0;
             this.hoverAmt[i] += (target - this.hoverAmt[i]) * ease;
@@ -350,12 +445,12 @@ class GlobeView {
             }
         }
         this.labelTarget = (this.hoveredRegion >= 0) ? 1 : 0;
-        this.labelAlpha += (this.labelTarget - this.labelAlpha) * Math.min(1, dt * (this.labelTarget > 0 ? 14 : 7));
+        this.labelAlpha += (this.labelTarget - this.labelAlpha) * Math.min(1, dtAdjusted * (this.labelTarget > 0 ? 14 : 7));
 
         const ctx = this.ctx;
         ctx.clearRect(0, 0, this.W, this.H);
 
-        const { r, g, b } = this.getAccent();
+        const { r, g, b } = this._getAccent();
         const PAL_LAND  = this.makePalette(r, g, b);
         const PAL_DIM   = this.makePalette(Math.round(r * 0.6), Math.round(g * 0.6), Math.round(b * 0.6));
         const PAL_HOT   = this.makePalette(255, Math.min(255, g + 30), Math.min(255, b + 60));

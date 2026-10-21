@@ -63,14 +63,14 @@ function showNotification(message, isError = false) {
     }, 2500);
 }
 
-let currentAccentRGB = COLOR_PRESETS.yellow.dark.rgb;
+let currentAccentRGB = COLOR_PRESETS.crimson.dark.rgb;
 
 function getAccentRGB() {
     return currentAccentRGB;
 }
 
 function applyColorPreset(key) {
-    const preset = COLOR_PRESETS[key] || COLOR_PRESETS.yellow;
+    const preset = COLOR_PRESETS[key] || COLOR_PRESETS.crimson;
     const root = document.documentElement;
     root.style.setProperty('--y', preset.dark.y);
     root.style.setProperty('--y-deep', preset.dark.yDeep);
@@ -82,6 +82,9 @@ function applyColorPreset(key) {
         `${parseInt(l.slice(0,2),16)},${parseInt(l.slice(2,4),16)},${parseInt(l.slice(4,6),16)}`);
     localStorage.setItem('colorPreset', key);
     updateSwatchActive();
+
+    if (window.backgroundSystem) window.backgroundSystem.refreshColors();
+    if (window.globeView) window.globeView.refreshColors();
 }
 
 function setCoverBackground(track) {
@@ -120,12 +123,16 @@ async function applyCoverAccent(track) {
     root.style.setProperty('--y-glow', `rgba(${palette.hexRgb.join(',')}, 0.15)`);
     root.style.setProperty('--y-rgb', palette.hexRgb.join(','));
     currentAccentRGB = palette.hexRgb;
+
+    if (window.backgroundSystem) window.backgroundSystem.refreshColors();
+    if (window.globeView) window.globeView.refreshColors();
+
     document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
 }
 
 function restoreUserAccent() {
     currentCoverPalette = null;
-    const key = localStorage.getItem('colorPreset') || 'yellow';
+    const key = localStorage.getItem('colorPreset') || 'crimson';
     applyColorPreset(key);
 }
 async function refreshCoverAppearance(track) {
@@ -155,7 +162,7 @@ function renderColorSwatches() {
 }
 
 function updateSwatchActive() {
-    const current = localStorage.getItem('colorPreset') || 'yellow';
+    const current = localStorage.getItem('colorPreset') || 'crimson';
     document.querySelectorAll('.color-swatch').forEach(s => {
         s.classList.toggle('active', s.dataset.preset === current);
     });
@@ -167,8 +174,8 @@ function applyAnimationIntensity(value) {
     if (scale < 0.4) {
         root.style.setProperty('--y-glow', 'transparent');
     } else {
-        const key = localStorage.getItem('colorPreset') || 'yellow';
-        const preset = COLOR_PRESETS[key] || COLOR_PRESETS.yellow;
+        const key = localStorage.getItem('colorPreset') || 'crimson';
+        const preset = COLOR_PRESETS[key] || COLOR_PRESETS.crimson;
         root.style.setProperty('--y-glow', preset.dark.glow);
     }
     if (typeof backgroundSystem !== 'undefined' && backgroundSystem) {
@@ -242,11 +249,13 @@ class TipPanel {
         this.titleEl.textContent = target.dataset.tipTitle || 'Подсказка';
         this.descEl.textContent  = target.dataset.tip || '';
         this.el.classList.add('visible');
+        document.body.classList.add('mini-player-visible');
     }
 
     hide() {
         this.active = null;
         this.el.classList.remove('visible');
+        document.body.classList.remove('mini-player-visible');
     }
 }
 
@@ -430,3 +439,60 @@ function updateCounter(el, value, word) {
     animateNumber(numEl, prev, value);
     wordEl.textContent = word;
 }
+
+function askPrompt(message, defaultValue = '') {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'ask-modal-overlay';
+        overlay.innerHTML = `
+            <div class="ask-modal">
+                <div class="ask-modal-title"></div>
+                <input type="text" class="ask-modal-input" autocomplete="off">
+                <div class="ask-modal-actions">
+                    <button class="artist-btn" data-act="cancel" type="button">Отмена</button>
+                    <button class="artist-btn primary" data-act="ok" type="button">ОК</button>
+                </div>
+            </div>
+        `;
+        overlay.querySelector('.ask-modal-title').textContent = message;
+
+        const input = overlay.querySelector('.ask-modal-input');
+        input.value = defaultValue;
+
+        document.body.appendChild(overlay);
+
+        requestAnimationFrame(() => {
+            overlay.classList.add('visible');
+            input.focus();
+            input.select();
+        });
+
+        let closed = false;
+        const close = (value) => {
+            if (closed) return;
+            closed = true;
+            overlay.classList.remove('visible');
+            setTimeout(() => overlay.remove(), 250);
+            resolve(value);
+        };
+
+        const ok = () => {
+            const v = input.value.trim();
+            close(v ? v : null);
+        };
+        const cancel = () => close(null);
+
+        overlay.querySelector('[data-act="ok"]').addEventListener('click', ok);
+        overlay.querySelector('[data-act="cancel"]').addEventListener('click', cancel);
+
+        overlay.addEventListener('mousedown', (e) => {
+            if (e.target === overlay) cancel();
+        });
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); ok(); }
+            else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+        });
+    });
+}
+window.askPrompt = askPrompt;
